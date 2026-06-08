@@ -453,7 +453,7 @@ struct KvmDirtyLogSlot {
 
 /// Wrapper over KVM VM ioctls.
 pub struct KvmVm {
-    fd: VmFd,
+    pub fd: VmFd,
     #[cfg(target_arch = "x86_64")]
     msrs: Vec<MsrEntry>,
     dirty_log_slots: RwLock<HashMap<u32, KvmDirtyLogSlot>>,
@@ -1370,11 +1370,11 @@ impl hypervisor::Hypervisor for KvmHypervisor {
     /// Retrieve TDX capabilities
     ///
     #[cfg(feature = "tdx")]
-    fn tdx_capabilities(&self) -> hypervisor::Result<TdxCapabilities> {
+    fn tdx_capabilities(&self, vm_fd: &RawFd) -> hypervisor::Result<TdxCapabilities> {
         let data = TdxCapabilities::default();
 
         tdx_command(
-            &self.kvm.as_raw_fd(),
+            vm_fd,
             TdxCommand::Capabilities,
             0,
             &data as *const _ as *const _,

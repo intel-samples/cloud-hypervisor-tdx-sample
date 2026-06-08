@@ -21,6 +21,8 @@ use crate::cpu::CpuVendor;
 use crate::kvm::TdxCapabilities;
 use crate::vm::Vm;
 use crate::{HypervisorType, HypervisorVmConfig};
+#[cfg(feature = "tdx")]
+use std::os::fd::RawFd;
 
 #[derive(Error, Debug)]
 pub enum HypervisorError {
@@ -138,7 +140,7 @@ pub trait Hypervisor: Send + Sync {
     /// Retrieve TDX capabilities
     ///
     #[cfg(feature = "tdx")]
-    fn tdx_capabilities(&self) -> Result<TdxCapabilities> {
+    fn tdx_capabilities(&self, vm_fd: &RawFd) -> Result<TdxCapabilities> {
         unimplemented!()
     }
     ///

@@ -733,7 +733,7 @@ impl Vm {
         let cpus_config = config.lock().unwrap().cpus.clone();
         let cpu_manager = cpu::CpuManager::new(
             &cpus_config,
-            vm,
+            vm.clone(),
             exit_evt,
             reset_evt,
             #[cfg(feature = "guest_debug")]
@@ -757,6 +757,8 @@ impl Vm {
                 hypervisor.as_ref(),
                 #[cfg(feature = "tdx")]
                 tdx_enabled,
+                #[cfg(feature = "tdx")]
+                vm.as_ref(),
             )
             .map_err(Error::CpuManager)?;
 
@@ -3147,6 +3149,9 @@ impl Snapshottable for Vm {
                     tdx: false,
                     amx,
                 },
+                #[cfg(feature = "tdx")]
+                // Snapshot not possible with TDX VM
+                &(u32::MAX as std::os::unix::io::RawFd),
             )
             .map_err(|e| {
                 MigratableError::MigrateReceive(anyhow!("Error generating common cpuid: {e:?}"))

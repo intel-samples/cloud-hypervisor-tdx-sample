@@ -13,6 +13,8 @@ pub mod regs;
 
 #[cfg(feature = "tdx")]
 pub mod tdx;
+#[cfg(feature = "tdx")]
+use std::os::fd::RawFd;
 
 mod mpspec;
 mod mptable;
@@ -558,6 +560,7 @@ impl CpuidFeatureEntry {
 pub fn generate_common_cpuid(
     hypervisor: &dyn hypervisor::Hypervisor,
     config: &CpuidConfig,
+    #[cfg(feature = "tdx")] vm_fd: &RawFd,
 ) -> super::Result<Vec<CpuIdEntry>> {
     #[allow(unused_unsafe)]
     // SAFETY: cpuid called with valid leaves
@@ -631,7 +634,7 @@ pub fn generate_common_cpuid(
     #[cfg(feature = "tdx")]
     let tdx_capabilities = if config.tdx {
         let caps = hypervisor
-            .tdx_capabilities()
+            .tdx_capabilities(vm_fd)
             .map_err(Error::TdxCapabilities)?;
         info!("TDX capabilities {caps:#?}");
         Some(caps)
