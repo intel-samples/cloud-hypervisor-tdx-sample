@@ -26,6 +26,7 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::anyhow;
 use kvm_ioctls::{NoDatamatch, VcpuFd, VmFd};
+use log::error;
 #[cfg(target_arch = "x86_64")]
 use log::warn;
 use vmm_sys_util::eventfd::EventFd;
@@ -91,9 +92,11 @@ use kvm_bindings::nested::KvmNestedStateBuffer;
 pub use kvm_bindings::{
     self, KVM_GUESTDBG_ENABLE, KVM_GUESTDBG_SINGLESTEP, KVM_IRQ_ROUTING_IRQCHIP,
     KVM_IRQ_ROUTING_MSI, KVM_MEM_LOG_DIRTY_PAGES, KVM_MEM_READONLY, KVM_MSI_VALID_DEVID,
+    KVM_MEM_GUEST_MEMFD, KVM_MEMORY_ATTRIBUTE_PRIVATE,
     kvm_clock_data, kvm_create_device, kvm_create_device as CreateDevice,
     kvm_device_attr as DeviceAttr, kvm_device_type_KVM_DEV_TYPE_VFIO, kvm_guest_debug,
     kvm_irq_routing, kvm_irq_routing_entry, kvm_mp_state, kvm_run, kvm_userspace_memory_region,
+    kvm_userspace_memory_region2, kvm_memory_attributes,
 };
 #[cfg(target_arch = "aarch64")]
 use kvm_bindings::{
@@ -778,6 +781,8 @@ impl vm::Vm for KvmVm {
         userspace_addr: *mut u8,
         readonly: bool,
         log_dirty_pages: bool,
+        guest_memfd: Option<u64>,
+        guest_memfd_offset: Option<u64>,
     ) -> vm::Result<()> {
         let mut flags = 0;
         if readonly {
@@ -789,12 +794,31 @@ impl vm::Vm for KvmVm {
 
         const _: () = assert!(core::mem::size_of::<usize>() <= core::mem::size_of::<u64>());
 
-        let mut region = kvm_userspace_memory_region {
-            slot,
-            guest_phys_addr,
-            memory_size: memory_size as u64,
-            userspace_addr: userspace_addr as usize as u64,
-            flags,
+        let mut region = if let Some(guest_memfd) = guest_memfd {
+            kvm_userspace_memory_region2 {
+                slot,
+                guest_phys_addr,
+                memory_size: memory_size as u64,
+                userspace_addr: userspace_addr as usize as u64,
+                flags: flags | KVM_MEM_GUEST_MEMFD,
+                guest_memfd: guest_memfd as u32,
+                // TODO: use the guest_memfd_offset.unwrap()
+                guest_memfd_offset: 0,
+                pad1: 0,
+                pad2: [0; 14],
+            }
+        } else {
+            kvm_userspace_memory_region2 {
+                slot,
+                guest_phys_addr,
+                memory_size: memory_size as u64,
+                userspace_addr: userspace_addr as usize as u64,
+                flags,
+                guest_memfd: 0,
+                guest_memfd_offset: 0,
+                pad1: 0,
+                pad2: [0; 14],
+            }
         };
 
         if (region.flags & KVM_MEM_LOG_DIRTY_PAGES) != 0 {
@@ -821,11 +845,31 @@ impl vm::Vm for KvmVm {
         }
 
         // SAFETY: Safe because caller promised this is safe.
-        unsafe {
+        let ret = unsafe {
             self.fd
-                .set_user_memory_region(region)
+                .set_user_memory_region2(region)
                 .map_err(|e| vm::HypervisorVmError::CreateUserMemory(e.into()))
+        };
+        if ret.is_err() {
+            return ret;
         }
+
+        if guest_memfd.is_some() {
+            let attr = kvm_memory_attributes {
+                address: guest_phys_addr,
+                size: memory_size as u64,
+                attributes: KVM_MEMORY_ATTRIBUTE_PRIVATE as u64,
+                flags: 0,
+            };
+            let ret = self.fd
+                .set_memory_attributes(attr)
+                .map_err(|e| vm::HypervisorVmError::CreateUserMemory(e.into()));
+            if ret.is_err() {
+                return ret;
+            }
+        }
+
+        Ok(())
     }
 
     /// Removes a guest physical memory region.

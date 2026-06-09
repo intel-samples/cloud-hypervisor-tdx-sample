@@ -3740,6 +3740,8 @@ mod unit_tests {
                     region.as_ptr(),
                     false,
                     false,
+                    None,
+                    None,
                 )
                 .expect("Cannot configure guest memory");
             }
@@ -3877,6 +3879,8 @@ pub fn test_vm() {
                 region.as_ptr() as _,
                 false,
                 false,
+                None,
+                None,
             )
             .expect("Cannot configure guest memory");
         }
