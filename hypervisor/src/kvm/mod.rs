@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::mem::offset_of;
 #[cfg(feature = "tdx")]
 use std::os::unix::io::AsRawFd;
-#[cfg(feature = "tdx")]
 use std::os::unix::io::RawFd;
 use std::result;
 #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
@@ -476,7 +475,6 @@ impl KvmVm {
         self.fd.check_extension(c)
     }
 
-    #[cfg(feature = "tdx")]
     /// Creates an anonymous file and returns a file descriptor that refers to it.
     pub fn create_guest_memfd(&self, gmem: kvm_bindings::kvm_create_guest_memfd) -> vm::Result<RawFd> {
         let fd = self.fd.create_guest_memfd(gmem);

@@ -5187,6 +5187,7 @@ impl IvshmemOps for IvshmemHandler {
             None,
             None,
             false,
+            None,
         )
         .map_err(|_| IvshmemError::CreateUserMemoryRegion)?;
         let mem_slot = {
