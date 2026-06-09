@@ -2521,6 +2521,8 @@ dependencies = [
  "hypervisor",
  "igvm",
  "igvm_defs",
+ "kvm-bindings",
+ "kvm-ioctls",
  "landlock",
  "libc",
  "linux-loader",
