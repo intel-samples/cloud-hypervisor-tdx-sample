@@ -20,8 +20,6 @@ use std::os::unix::thread::JoinHandleExt;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Barrier, Mutex};
 use std::{cmp, io, result, thread};
-#[cfg(feature = "tdx")]
-use std::os::fd::AsRawFd;
 
 use acpi_tables::sdt::Sdt;
 use acpi_tables::{Aml, aml};
@@ -990,8 +988,6 @@ impl CpuManager {
         hypervisor: &dyn hypervisor::Hypervisor,
         #[cfg(feature = "tdx")] vm: &dyn hypervisor::Vm,
     ) -> Result<()> {
-        #[cfg(feature = "tdx")]
-        let kvm_vm = vm.as_any().downcast_ref::<hypervisor::kvm::KvmVm>().unwrap();
         self.cpuid = {
             let phys_bits = physical_bits(hypervisor, self.config.max_phys_bits);
             arch::generate_common_cpuid(
@@ -1004,7 +1000,7 @@ impl CpuManager {
                     amx: self.config.features.amx,
                 },
                 #[cfg(feature = "tdx")]
-                Some(&kvm_vm.fd.as_raw_fd()),
+                Some(vm),
             )
             .map_err(Error::CommonCpuId)?
         };

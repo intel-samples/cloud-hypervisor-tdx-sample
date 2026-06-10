@@ -17,12 +17,8 @@ use thiserror::Error;
 use crate::arch::x86::CpuIdEntry;
 #[cfg(target_arch = "x86_64")]
 use crate::cpu::CpuVendor;
-#[cfg(feature = "tdx")]
-use crate::kvm::TdxCapabilities;
 use crate::vm::Vm;
 use crate::{HypervisorType, HypervisorVmConfig};
-#[cfg(feature = "tdx")]
-use std::os::fd::RawFd;
 
 #[derive(Error, Debug)]
 pub enum HypervisorError {
@@ -142,23 +138,6 @@ pub trait Hypervisor: Send + Sync {
     ///
     fn get_host_ipa_limit(&self) -> i32;
     ///
-    /// Retrieve TDX capabilities
-    ///
-    #[cfg(feature = "tdx")]
-    fn tdx_capabilities(&self, vm_fd: &RawFd) -> Result<TdxCapabilities> {
-        unimplemented!()
-    }
-    ///
-    /// Retrieve TDX capabilities CPUID entry (flags, eax, ebx, ecx, edx)
-    ///
-    #[cfg(feature = "tdx")]
-    fn tdx_filter_cpuid(
-        &self,
-        cpuids: &mut Vec<CpuIdEntry>,
-        tdx_capabilities: &TdxCapabilities,
-    ) -> Result<()> {
-        unimplemented!()
-    }
     ///
     /// Get the number of supported hardware breakpoints
     ///

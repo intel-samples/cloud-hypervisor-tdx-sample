@@ -13,8 +13,6 @@ pub mod regs;
 
 #[cfg(feature = "tdx")]
 pub mod tdx;
-#[cfg(feature = "tdx")]
-use std::os::fd::RawFd;
 
 mod mpspec;
 mod mptable;
@@ -25,6 +23,8 @@ use std::mem;
 
 use hypervisor::arch::x86::{CPUID_FLAG_VALID_INDEX, CpuIdEntry};
 use hypervisor::{CpuVendor, HypervisorCpuError, HypervisorError};
+#[cfg(feature = "tdx")]
+use hypervisor::HypervisorVmError;
 use linux_loader::loader::bootparam::{boot_params, setup_header};
 use linux_loader::loader::elf::start_info::{
     hvm_memmap_table_entry, hvm_modlist_entry, hvm_start_info,
@@ -157,8 +157,8 @@ pub enum Error {
 
     /// Error retrieving TDX capabilities through the hypervisor (kvm/mshv) API
     #[cfg(feature = "tdx")]
-    #[error("Error retrieving TDX capabilities through the hypervisor API")]
-    TdxCapabilities(#[source] HypervisorError),
+    #[error("Error retrieving TDX capabilities through the VM API")]
+    TdxCapabilities(#[source] HypervisorVmError),
 
     /// Failed to configure E820 map for bzImage
     #[error("Failed to configure E820 map for bzImage")]
@@ -560,7 +560,7 @@ impl CpuidFeatureEntry {
 pub fn generate_common_cpuid(
     hypervisor: &dyn hypervisor::Hypervisor,
     config: &CpuidConfig,
-    #[cfg(feature = "tdx")] vm_fd: Option<&RawFd>,
+    #[cfg(feature = "tdx")] vm: Option<&dyn hypervisor::Vm>,
 ) -> super::Result<Vec<CpuIdEntry>> {
     #[allow(unused_unsafe)]
     // SAFETY: cpuid called with valid leaves
@@ -635,13 +635,13 @@ pub fn generate_common_cpuid(
 
     #[cfg(feature = "tdx")]
     let tdx_capabilities = if config.tdx {
-        let vm_fd = vm_fd.ok_or_else(|| {
-            Error::TdxCapabilities(HypervisorError::InvalidVmFd(
-                "VM fd is required to get TDX capabilities".to_string(),
-            ))
+        let tdx_vm = vm.ok_or_else(|| {
+            Error::TdxCapabilities(HypervisorVmError::InitializeTdx(std::io::Error::other(
+                "Missing VM instance for TDX CPUID generation",
+            )))
         })?;
-        let caps = hypervisor
-            .tdx_capabilities(vm_fd)
+        let caps = tdx_vm
+            .tdx_capabilities()
             .map_err(Error::TdxCapabilities)?;
         info!("TDX capabilities {caps:#?}");
         Some(caps)
@@ -809,7 +809,14 @@ pub fn generate_common_cpuid(
 
     #[cfg(feature = "tdx")]
     if let Some(caps) = &tdx_capabilities {
-        hypervisor.tdx_filter_cpuid(&mut cpuid, caps).unwrap();
+        let tdx_vm = vm.ok_or_else(|| {
+            Error::TdxCapabilities(HypervisorVmError::InitializeTdx(std::io::Error::other(
+                "Missing VM instance for TDX CPUID filtering",
+            )))
+        })?;
+        tdx_vm
+            .tdx_filter_cpuid(&mut cpuid, caps)
+            .map_err(Error::TdxCapabilities)?;
     }
 
     Ok(cpuid)
