@@ -226,6 +226,16 @@ pub enum Error {
 }
 pub type Result<T> = result::Result<T, Error>;
 
+#[cfg(feature = "tdx")]
+/// CPUID generation mode for TDX builds.
+///
+/// This enum intentionally replaces a loose `(tdx: bool, vm: &dyn Vm)` pair so
+/// callers cannot express inconsistent states.
+pub enum TdxCpuidMode<'a> {
+    Disabled,
+    Enabled { vm: &'a dyn hypervisor::Vm },
+}
+
 const PR_SCHED_CORE: libc::c_int = 62;
 const PR_SCHED_CORE_GET: libc::c_int = 0;
 const PR_SCHED_CORE_CREATE: libc::c_int = 1;
@@ -986,8 +996,16 @@ impl CpuManager {
     pub fn populate_cpuid(
         &mut self,
         hypervisor: &dyn hypervisor::Hypervisor,
-        #[cfg(feature = "tdx")] vm: &dyn hypervisor::Vm,
+        #[cfg(feature = "tdx")] tdx_mode: TdxCpuidMode<'_>,
     ) -> Result<()> {
+        // Keep the TDX decision and VM handle tied to one typed input to avoid
+        // bool/reference mismatches at call sites.
+        #[cfg(feature = "tdx")]
+        let (tdx, vm) = match tdx_mode {
+            TdxCpuidMode::Disabled => (false, None),
+            TdxCpuidMode::Enabled { vm } => (true, Some(vm)),
+        };
+
         self.cpuid = {
             let phys_bits = physical_bits(hypervisor, self.config.max_phys_bits);
             arch::generate_common_cpuid(
@@ -996,11 +1014,11 @@ impl CpuManager {
                     phys_bits,
                     kvm_hyperv: self.config.kvm_hyperv,
                     #[cfg(feature = "tdx")]
-                    tdx: self.tdx_enabled,
+                    tdx,
                     amx: self.config.features.amx,
                 },
                 #[cfg(feature = "tdx")]
-                Some(vm),
+                vm,
             )
             .map_err(Error::CommonCpuId)?
         };

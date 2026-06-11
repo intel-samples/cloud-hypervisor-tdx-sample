@@ -939,7 +939,11 @@ impl Vm {
             .populate_cpuid(
                 hypervisor.as_ref(),
                 #[cfg(feature = "tdx")]
-                vm.as_ref(),
+                if tdx_enabled {
+                    cpu::TdxCpuidMode::Enabled { vm: vm.as_ref() }
+                } else {
+                    cpu::TdxCpuidMode::Disabled
+                },
             )
             .map_err(Error::CpuManager)?;
 
