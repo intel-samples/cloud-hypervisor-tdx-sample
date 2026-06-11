@@ -548,6 +548,7 @@ impl Vcpu {
         #[cfg(target_arch = "x86_64")] kvm_hyperv: bool,
         #[cfg(target_arch = "x86_64")] topology: (u16, u16, u16, u16),
         #[cfg(target_arch = "x86_64")] nested: bool,
+        #[cfg(feature = "tdx")] tdx_enabled: bool,
     ) -> Result<()> {
         #[cfg(target_arch = "aarch64")]
         {
@@ -569,6 +570,8 @@ impl Vcpu {
             self.vendor,
             topology,
             nested,
+            #[cfg(feature = "tdx")]
+            tdx_enabled,
         )
         .map_err(Error::VcpuConfiguration)?;
 
@@ -697,6 +700,8 @@ pub struct CpuManager {
     hypervisor: Arc<dyn hypervisor::Hypervisor>,
     #[cfg(feature = "sev_snp")]
     sev_snp_enabled: bool,
+    #[cfg(feature = "tdx")]
+    tdx_enabled: bool,
     // State of the core scheduling group leader election (VM mode).
     core_scheduling_group_leader: Arc<AtomicI32>,
 }
@@ -971,6 +976,8 @@ impl CpuManager {
             hypervisor,
             #[cfg(feature = "sev_snp")]
             sev_snp_enabled,
+            #[cfg(feature = "tdx")]
+            tdx_enabled,
             core_scheduling_group_leader: Arc::new(AtomicI32::new(
                 CoreSchedulingLeader::Initial as i32,
             )),
@@ -981,7 +988,6 @@ impl CpuManager {
     pub fn populate_cpuid(
         &mut self,
         hypervisor: &dyn hypervisor::Hypervisor,
-        #[cfg(feature = "tdx")] tdx: bool,
         #[cfg(feature = "tdx")] vm: &dyn hypervisor::Vm,
     ) -> Result<()> {
         #[cfg(feature = "tdx")]
@@ -994,11 +1000,11 @@ impl CpuManager {
                     phys_bits,
                     kvm_hyperv: self.config.kvm_hyperv,
                     #[cfg(feature = "tdx")]
-                    tdx,
+                    tdx: self.tdx_enabled,
                     amx: self.config.features.amx,
                 },
                 #[cfg(feature = "tdx")]
-                &kvm_vm.fd.as_raw_fd(),
+                Some(&kvm_vm.fd.as_raw_fd()),
             )
             .map_err(Error::CommonCpuId)?
         };
@@ -1099,6 +1105,8 @@ impl CpuManager {
             self.config.kvm_hyperv,
             topology,
             self.config.nested,
+            #[cfg(feature = "tdx")]
+            self.tdx_enabled,
         )?;
 
         #[cfg(target_arch = "aarch64")]

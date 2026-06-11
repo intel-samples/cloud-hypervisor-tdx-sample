@@ -939,8 +939,6 @@ impl Vm {
             .populate_cpuid(
                 hypervisor.as_ref(),
                 #[cfg(feature = "tdx")]
-                tdx_enabled,
-                #[cfg(feature = "tdx")]
                 vm.as_ref(),
             )
             .map_err(Error::CpuManager)?;
@@ -3371,7 +3369,7 @@ impl Snapshottable for Vm {
                 },
                 #[cfg(feature = "tdx")]
                 // Snapshot not possible with TDX VM
-                &(u32::MAX as std::os::unix::io::RawFd),
+                None,
             )
             .map_err(|e| {
                 MigratableError::MigrateReceive(anyhow!("Error generating common cpuid: {e:?}"))
