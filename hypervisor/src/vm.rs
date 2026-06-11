@@ -31,7 +31,7 @@ use crate::arch::riscv64::aia::{Vaia, VaiaConfig};
 #[cfg(feature = "tdx")]
 use crate::arch::x86::CpuIdEntry;
 #[cfg(feature = "tdx")]
-use crate::kvm::TdxCapabilities;
+use crate::kvm::kvm_tdx_capabilities;
 use crate::cpu::Vcpu;
 use crate::{IoEventAddress, IrqRoutingEntry};
 
@@ -408,7 +408,7 @@ pub trait Vm: Send + Sync + Any {
     }
     #[cfg(feature = "tdx")]
     /// Retrieve TDX capabilities
-    fn tdx_capabilities(&self) -> Result<TdxCapabilities> {
+    fn tdx_capabilities(&self) -> Result<kvm_tdx_capabilities> {
         unimplemented!()
     }
     #[cfg(feature = "tdx")]
@@ -416,7 +416,7 @@ pub trait Vm: Send + Sync + Any {
     fn tdx_filter_cpuid(
         &self,
         _cpuids: &mut Vec<CpuIdEntry>,
-        _tdx_capabilities: &TdxCapabilities,
+        _tdx_capabilities: &kvm_tdx_capabilities,
     ) -> Result<()> {
         unimplemented!()
     }
