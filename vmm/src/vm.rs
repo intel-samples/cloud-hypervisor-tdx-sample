@@ -46,6 +46,10 @@ use gdbstub_arch::aarch64::reg::AArch64CoreRegs as CoreRegs;
 use gdbstub_arch::x86::reg::X86_64CoreRegs as CoreRegs;
 #[cfg(target_arch = "aarch64")]
 use hypervisor::arch::aarch64::regs::AARCH64_PMU_IRQ;
+#[cfg(feature = "tdx")]
+use hypervisor::cpu::{
+    TdxInitGuestPhysAddr, TdxInitHostPhysAddr, TdxInitMemoryRegionSize,
+};
 use hypervisor::{HypervisorVmConfig, HypervisorVmError, VmOps};
 use libc::{SIGWINCH, termios};
 use linux_loader::cmdline::Cmdline;
@@ -2756,6 +2760,15 @@ impl Vm {
 
         for section in sections {
             let size = section.size.try_into().unwrap();
+            let host_address = TdxInitHostPhysAddr::from_ptr(
+                virtio_devices::get_host_address_range(&*mem, GuestAddress(section.address), size)
+                    .unwrap(),
+            )
+            .map_err(Error::InitializeTdxMemoryRegion)?;
+            let guest_address = TdxInitGuestPhysAddr::new(section.address)
+                .map_err(Error::InitializeTdxMemoryRegion)?;
+            let size = TdxInitMemoryRegionSize::new(size)
+                .map_err(Error::InitializeTdxMemoryRegion)?;
             // SAFETY: get_host_address_range does proper bounds checking
             unsafe {
                 self.cpu_manager
@@ -2768,13 +2781,8 @@ impl Vm {
                     .unwrap()
                     .vcpu
                     .tdx_init_memory_region(
-                        virtio_devices::get_host_address_range(
-                            &*mem,
-                            GuestAddress(section.address),
-                            size,
-                        )
-                        .unwrap(),
-                        section.address,
+                        host_address,
+                        guest_address,
                         size,
                         /* TDVF_SECTION_ATTRIBUTES_EXTENDMR */
                         section.attributes == 1,

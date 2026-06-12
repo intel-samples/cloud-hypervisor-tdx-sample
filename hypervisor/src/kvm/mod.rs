@@ -133,6 +133,8 @@ use crate::kvm::tdx::{
     TdxCommand, kvm_cpuid2,
 };
 #[cfg(feature = "tdx")]
+use crate::cpu::{TdxInitGuestPhysAddr, TdxInitHostPhysAddr, TdxInitMemoryRegionSize};
+#[cfg(feature = "tdx")]
 pub use crate::kvm::tdx::{TdxExitDetails, TdxExitStatus, kvm_tdx_capabilities};
 
 #[cfg(target_arch = "x86_64")]
@@ -2673,15 +2675,15 @@ impl cpu::Vcpu for KvmVcpu {
     #[cfg(feature = "tdx")]
     unsafe fn tdx_init_memory_region(
         &self,
-        host_address: *mut u8,
-        guest_address: u64,
-        size: usize,
+        host_address: TdxInitHostPhysAddr,
+        guest_address: TdxInitGuestPhysAddr,
+        size: TdxInitMemoryRegionSize,
         measure: bool,
     ) -> cpu::Result<()> {
         let data = KvmTdxInitMemRegion {
-            source_addr: host_address as _,
-            gpa: guest_address,
-            nr_pages: (size / 4096).try_into().unwrap(),
+            source_addr: host_address.raw_value(),
+            gpa: guest_address.raw_value(),
+            nr_pages: size.nr_pages()?,
         };
 
         tdx_command(
