@@ -344,13 +344,18 @@ struct KvmDirtyLogSlot {
 
 /// Wrapper over KVM VM ioctls.
 pub struct KvmVm {
-    pub fd: VmFd,
+    fd: VmFd,
     #[cfg(target_arch = "x86_64")]
     msrs: Vec<MsrEntry>,
     dirty_log_slots: RwLock<HashMap<u32, KvmDirtyLogSlot>>,
 }
 
 impl KvmVm {
+    #[cfg(feature = "tdx")]
+    /// Fetch the KVM VM file descriptor.
+    pub fn fd(&self) -> &VmFd {
+        &self.fd
+    }
     ///
     /// Creates an emulated device in the kernel.
     ///

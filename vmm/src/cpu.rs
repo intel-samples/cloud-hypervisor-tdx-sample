@@ -501,7 +501,7 @@ macro_rules! round_up {
 /// A wrapper around creating and using a kvm-based VCPU.
 pub struct Vcpu {
     // The hypervisor abstracted CPU.
-    pub vcpu: Box<dyn hypervisor::Vcpu>,
+    vcpu: Box<dyn hypervisor::Vcpu>,
     id: u32,
     #[cfg(target_arch = "aarch64")]
     mpidr: u64,
@@ -539,6 +539,12 @@ impl Vcpu {
             #[cfg(target_arch = "x86_64")]
             vendor: cpu_vendor,
         })
+    }
+
+    #[cfg(feature = "tdx")]
+    /// Fetch the underlying VCPU.
+    pub fn vcpu(&self) -> &dyn hypervisor::Vcpu {
+        self.vcpu.as_ref()
     }
 
     /// Configures a vcpu and should be called once per vcpu when created.
