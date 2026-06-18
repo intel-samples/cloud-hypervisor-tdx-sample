@@ -2749,7 +2749,9 @@ impl cpu::Vcpu for KvmVcpu {
                 size: tdx_vmcall.in_r13,
             }),
             TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT => {
-                Ok(TdxExitDetails::SetupEventNotifyInterrupt)
+                Ok(TdxExitDetails::SetupEventNotifyInterrupt {
+                    vector: tdx_vmcall.in_r12 as u8,
+                })
             }
             _ => Err(cpu::HypervisorCpuError::UnknownTdxVmCall),
         }
