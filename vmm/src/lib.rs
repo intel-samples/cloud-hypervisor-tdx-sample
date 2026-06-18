@@ -91,6 +91,8 @@ pub mod migration_transport;
 mod pci_segment;
 pub mod seccomp_filters;
 mod serial_manager;
+#[cfg(feature = "tdx")]
+mod tdx_qgs;
 mod sigwinch_listener;
 mod sync_utils;
 mod uffd;
