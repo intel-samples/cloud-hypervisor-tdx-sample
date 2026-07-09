@@ -143,7 +143,7 @@ pub use crate::kvm::tdx::{TdxExitDetails, TdxExitStatus, kvm_tdx_capabilities};
 ioctl_io_nr!(KVM_NMI, kvm_bindings::KVMIO, 0x9a);
 
 #[cfg(feature = "tdx")]
-const KVM_EXIT_TDX: u32 = 50;
+const KVM_EXIT_TDX: u32 = 40;
 #[cfg(feature = "tdx")]
 const TDG_VP_VMCALL_GET_QUOTE: u64 = 0x10002;
 #[cfg(feature = "tdx")]
