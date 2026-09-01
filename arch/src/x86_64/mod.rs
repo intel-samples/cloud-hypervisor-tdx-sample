@@ -70,6 +70,10 @@ const KVM_FEATURE_ASYNC_PF_BIT: u8 = 4;
 const KVM_FEATURE_ASYNC_PF_VMEXIT_BIT: u8 = 10;
 #[cfg(feature = "tdx")]
 const KVM_FEATURE_STEAL_TIME_BIT: u8 = 5;
+#[cfg(feature = "tdx")]
+const KVM_FEATURE_PV_EOI_BIT: u8 = 6;
+#[cfg(feature = "tdx")]
+const KVM_FEATURE_ASYNC_PF_INT_BIT: u8 = 14;
 
 const KVM_FEATURE_MSI_EXT_DEST_ID: u8 = 15;
 
@@ -560,7 +564,6 @@ impl CpuidFeatureEntry {
 pub fn generate_common_cpuid(
     hypervisor: &dyn hypervisor::Hypervisor,
     config: &CpuidConfig,
-    #[cfg(feature = "tdx")] vm: Option<&dyn hypervisor::Vm>,
 ) -> super::Result<Vec<CpuIdEntry>> {
     #[allow(unused_unsafe)]
     // SAFETY: cpuid called with valid leaves
@@ -630,22 +633,6 @@ pub fn generate_common_cpuid(
         .map_err(Error::CpuidGetSupported)?;
 
     CpuidPatch::patch_cpuid(&mut cpuid, &cpuid_patches);
-
-    #[cfg(feature = "tdx")]
-    let tdx_capabilities = if config.tdx {
-        let tdx_vm = vm.ok_or_else(|| {
-            Error::TdxCapabilities(HypervisorVmError::InitializeTdx(std::io::Error::other(
-                "Missing VM instance for TDX CPUID generation",
-            )))
-        })?;
-        let caps = tdx_vm
-            .tdx_capabilities()
-            .map_err(Error::TdxCapabilities)?;
-        info!("TDX capabilities {caps:#?}");
-        Some(caps)
-    } else {
-        None
-    };
 
     // Update some existing CPUID
     for entry in cpuid.as_mut_slice().iter_mut() {
@@ -730,7 +717,9 @@ pub fn generate_common_cpuid(
                         | (1 << KVM_FEATURE_CLOCKSOURCE_STABLE_BIT)
                         | (1 << KVM_FEATURE_ASYNC_PF_BIT)
                         | (1 << KVM_FEATURE_ASYNC_PF_VMEXIT_BIT)
-                        | (1 << KVM_FEATURE_STEAL_TIME_BIT));
+                        | (1 << KVM_FEATURE_STEAL_TIME_BIT)
+                        | (1 << KVM_FEATURE_PV_EOI_BIT)
+                        | (1 << KVM_FEATURE_ASYNC_PF_INT_BIT));
                 }
             }
             _ => {}
@@ -798,18 +787,6 @@ pub fn generate_common_cpuid(
                 ..Default::default()
             });
         }
-    }
-
-    #[cfg(feature = "tdx")]
-    if let Some(caps) = &tdx_capabilities {
-        let tdx_vm = vm.ok_or_else(|| {
-            Error::TdxCapabilities(HypervisorVmError::InitializeTdx(std::io::Error::other(
-                "Missing VM instance for TDX CPUID filtering",
-            )))
-        })?;
-        tdx_vm
-            .tdx_filter_cpuid(&mut cpuid, caps)
-            .map_err(Error::TdxCapabilities)?;
     }
 
     Ok(cpuid)
