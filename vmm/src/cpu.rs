@@ -1109,8 +1109,6 @@ impl CpuManager {
                     tdx,
                     amx: self.config.features.amx,
                 },
-                #[cfg(feature = "tdx")]
-                vm,
             )
             .map_err(Error::CommonCpuId)?
         };
