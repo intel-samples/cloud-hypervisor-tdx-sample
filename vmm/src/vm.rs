@@ -3395,6 +3395,9 @@ impl Snapshottable for Vm {
                     tdx: false,
                     amx,
                 },
+                #[cfg(feature = "tdx")]
+                // Snapshot not possible with TDX VM
+                None,
             )
             .map_err(|e| {
                 MigratableError::MigrateReceive(anyhow!("Error generating common cpuid: {e:?}"))
