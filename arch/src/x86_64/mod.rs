@@ -851,7 +851,6 @@ pub fn configure_vcpu(
 
     // Per vCPU CPUID changes; common are handled via generate_common_cpuid()
     let mut cpuid = cpuid;
-    let la57_enabled = CpuidPatch::is_feature_enabled(&cpuid, 7, 0, CpuidReg::ECX, 16);
     CpuidPatch::set_cpuid_reg(&mut cpuid, 0xb, None, CpuidReg::EDX, x2apic_id);
     CpuidPatch::set_cpuid_reg(&mut cpuid, 0x1f, None, CpuidReg::EDX, x2apic_id);
     if matches!(cpu_vendor, CpuVendor::AMD) {
@@ -864,11 +863,6 @@ pub fn configure_vcpu(
         if entry.function == 1 {
             entry.ebx &= 0xffffff;
             entry.ebx |= x2apic_id << 24;
-            #[cfg(feature = "tdx")]
-            if tdx_enabled == true {
-                // TDX vCPUs are launched with xAPIC mode, so we need to set the x2APIC bit in CPUID to make sure the guest OS can enable x2APIC mode and use the correct APIC ID.
-                entry.ecx |= 0x200000;
-            }
             apic_id_patched = true;
             if matches!(cpu_vendor, CpuVendor::Intel) {
                 if !nested {
@@ -883,33 +877,8 @@ pub fn configure_vcpu(
                 entry.ecx &= !(1 << SVM_ECX_BIT);
             }
         }
-        if entry.function == 0x8000_0008 {
-            /* 64 bit processor */
-            let virt_addr_width = if la57_enabled { 57 } else { 48 };
-            let mut guest_phys_bits = (entry.eax >> 16) & 0xff;
-            let phys_bits = entry.eax & 0xff;
-            if guest_phys_bits > phys_bits {
-                guest_phys_bits = phys_bits;
-            }
-            entry.eax = phys_bits
-                | (virt_addr_width << 8)
-                | (guest_phys_bits << 16);
-        }
     }
     assert!(apic_id_patched);
-
-    #[cfg(feature = "tdx")]
-    if tdx_enabled == true {
-        CpuidPatch::set_cpuid_reg(&mut cpuid, 0x8000_0000, Some(0), CpuidReg::EAX, 0x80000008);
-        CpuidPatch::set_cpuid_reg(&mut cpuid, 0x8000_0000, None, CpuidReg::EBX, 0);
-        CpuidPatch::set_cpuid_reg(&mut cpuid, 0x8000_0000, None, CpuidReg::ECX, 0);
-        CpuidPatch::set_cpuid_reg(&mut cpuid, 0x8000_0000, None, CpuidReg::EDX, 0);
-        // Set KVMKVMKVM\0\0\0 within CPUID
-        CpuidPatch::set_cpuid_reg(&mut cpuid, 0x4000_0200, Some(0), CpuidReg::EAX, 0x4000_0200);
-        CpuidPatch::set_cpuid_reg(&mut cpuid, 0x4000_0200, None, CpuidReg::EBX, 0x4b4d564b);  // KVMK
-        CpuidPatch::set_cpuid_reg(&mut cpuid, 0x4000_0200, None, CpuidReg::ECX, 0x564b4d56);  // VMKV
-        CpuidPatch::set_cpuid_reg(&mut cpuid, 0x4000_0200, None, CpuidReg::EDX, 0x0000004d);  // M\0\0\0
-    }
 
     update_cpuid_topology(
         &mut cpuid, topology.0, topology.1, topology.2, topology.3, cpu_vendor, id,
@@ -946,6 +915,14 @@ pub fn configure_vcpu(
         vcpu.enable_hyperv_synic().unwrap();
     }
 
+    #[cfg(feature = "tdx")]
+    // For TDX, the vCPU's MSR state is owned by the TDX module and cannot be
+    // programmed through KVM_SET_MSRS (the vCPU is guest-state protected), so
+    // skip the boot MSR setup for TDs.
+    if !tdx_enabled {
+        regs::setup_msrs(vcpu).map_err(Error::MsrsConfiguration)?;
+    }
+    #[cfg(not(feature = "tdx"))]
     regs::setup_msrs(vcpu).map_err(Error::MsrsConfiguration)?;
     if let Some((kernel_entry_point, guest_memory)) = boot_setup {
         regs::setup_regs(vcpu, kernel_entry_point).map_err(Error::RegsConfiguration)?;
@@ -959,6 +936,13 @@ pub fn configure_vcpu(
         let enable_x2_apic_mode = get_max_x2apic_id(topology) > MAX_SUPPORTED_CPUS_LEGACY;
         regs::setup_sregs(&guest_memory.memory(), vcpu, enable_x2_apic_mode)
             .map_err(Error::SregsConfiguration)?;
+    }
+    #[cfg(feature = "tdx")]
+    // For TDX, the vCPU's local APIC state is owned by the TDX module and is not
+    // accessible via KVM_GET_LAPIC/KVM_SET_LAPIC (the vCPU is guest-state
+    // protected), so skip the LINT setup that those ioctls back.
+    if !tdx_enabled {
+        interrupts::set_lint(vcpu).map_err(|e| Error::LocalIntConfiguration(e.into()))?;
     }
     #[cfg(not(feature = "tdx"))]
     interrupts::set_lint(vcpu).map_err(|e| Error::LocalIntConfiguration(e.into()))?;
