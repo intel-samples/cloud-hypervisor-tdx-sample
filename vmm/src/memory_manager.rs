@@ -2687,7 +2687,7 @@ impl MemoryManager {
 
     #[cfg(all(target_arch = "x86_64", feature = "guest_debug"))]
     pub fn coredump_memory_regions(&self, mem_offset: u64) -> CoredumpMemoryRegions {
-        let mut mapping_sorted_by_gpa = self.guest_ram_mappings.clone();
+        let mut mapping_sorted_by_gpa = self.guest_ram_mappings.read().unwrap().clone();
         mapping_sorted_by_gpa.sort_by_key(|m| m.gpa);
 
         let mut mem_offset_in_elf = mem_offset;
